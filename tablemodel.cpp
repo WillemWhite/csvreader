@@ -10,7 +10,7 @@ TableModel::TableModel()
 
 }
 
-string TableModel::getValue(const ModelIndex &index) const
+const string TableModel::getValue(const ModelIndex &index) const
 {
     bool colExists = std::find(columns.begin(), columns.end(), index.column) 
                      != columns.end();
@@ -44,7 +44,73 @@ void TableModel::setValue(const ModelIndex &index, const string &value)
     data[index.column][index.row] = value;
 }
 
-ModelIndex TableModel::strToIndex(const string &str) const
+void TableModel::calcFuncValues()
+{
+    for (const auto &column : columns)
+    {
+        for (const auto &row : rows)
+        {
+            calcFuncValue(ModelIndex{column, row});
+        }
+    }
+}
+
+void TableModel::calcFuncValue(const ModelIndex &index)
+{
+    string formula = getValue(index);
+    int idxEqual = formula.find("=");
+    if (idxEqual == string::npos)
+        return;
+
+    processingIndexes.push_back(index);
+    for (char opSign : {'+', '-', '*', '/'})
+    {
+        int idxOpSign = formula.find(opSign, idxEqual);
+        if (idxOpSign == string::npos) 
+            continue;
+        
+        string strOp1 = formula.substr(idxEqual+1, idxOpSign - idxEqual-1);
+        string strOp2 = formula.substr(idxOpSign+1);
+
+        int numOp1;
+        int numOp2;
+        try
+        {
+            numOp1 = operandToIntFromIndex(strOp1, index);
+            numOp2 = operandToIntFromIndex(strOp2, index);
+        }
+        catch(const string &e)
+        {
+            setValue(index, e);
+            processingIndexes.remove(index);
+            return;
+        }
+        
+        switch (opSign)
+        {
+        case '+':
+            setValue(index, std::to_string(numOp1 + numOp2));
+            break;
+        case '-':
+            setValue(index, std::to_string(numOp1 - numOp2));
+            break;
+        case '*':
+            setValue(index, std::to_string(numOp1 * numOp2));
+            break;
+        case '/':
+            if (numOp2 != 0)
+                setValue(index, std::to_string(numOp1 / numOp2));
+            else
+                setValue(index, "DIVISION BY ZERO!");
+            break;
+        }
+
+        processingIndexes.remove(index);
+        return;
+    }
+}
+
+const ModelIndex TableModel::strToIndex(const string &str) const
 {
     string strReduced;
     for (int i = 0; i < str.length(); i++)
@@ -70,114 +136,58 @@ ModelIndex TableModel::strToIndex(const string &str) const
     throw string{"INVALID INDEX!"};
 }
 
-void TableModel::calcFuncValues()
+const int TableModel::operandToIntFromIndex(
+    const string &operand, 
+    const ModelIndex &index
+    )
 {
-    for (const auto &column : columns)
+    int num;
+    try 
     {
-        for (const auto &row : rows)
-        {
-            calcFuncValue(ModelIndex{column, row});
-        }
+        std::size_t pos;
+        num = std::stoi(operand, &pos);
+        if (pos != operand.length())
+            throw std::invalid_argument{"NOT A NUMBER!"};
     }
-}
-
-void TableModel::calcFuncValue(const ModelIndex &index)
-{
-    string formula = getValue(index);
-    int idxEqual = formula.find("=");
-    if (idxEqual == string::npos)
-        return;
-
-    for (char opSign : {'+', '-', '*', '/'})
+    catch (const std::invalid_argument &e)
     {
-        int idxOpSign = formula.find(opSign, idxEqual);
-        if (idxOpSign == string::npos) 
-            continue;
-        
-        string strOp1 = formula.substr(idxEqual+1, idxOpSign - idxEqual-1);
-        string strOp2 = formula.substr(idxOpSign+1);
-
-        ModelIndex idxOp1;
-        ModelIndex idxOp2;
+        // Checking if it's index.
+        ModelIndex idxOp;
         try 
         {
-            idxOp1 = strToIndex(strOp1);
-            idxOp2 = strToIndex(strOp2);
+            idxOp = strToIndex(operand);
         }
         catch(const string &e)
         {
-            setValue(index, e);
-            return;
+            throw string{"INVALID OPERAND!"};
         }
 
-        // If exists index of current cell in formula then error.
-        if (idxOp1.column == index.column && idxOp1.row == index.row
-            || idxOp2.column == index.column && idxOp2.row == index.row) {
-            setValue(index, "INVALID INDEX!");
-            return;
+        // If index is processing then we can't do anything.
+        if (std::find(
+                processingIndexes.begin(), 
+                processingIndexes.end(), 
+                idxOp
+                ) != processingIndexes.end()) {
+            throw string{"REFERENCE TO CALCULATING IDX!"};
         }
-        
-        // Calculating values in operands.
-        calcFuncValue(idxOp1);
-        calcFuncValue(idxOp2);
 
-        string valOp1 = getValue(idxOp1);
-        string valOp2 = getValue(idxOp2);
-        
-        // If operand have an error then this cell have this error too.
-        if (valOp1 == "INVALID INDEX!" || valOp2 == "INVALID INDEX!") {
-            setValue(index, "INVALID INDEX!");
-            return;
-        }
-        if (valOp1 == "WRONG VALUES IN CELLS!" || valOp2 == "WRONG VALUES IN CELLS!") {
-            setValue(index, "WRONG VALUES IN CELLS!");
-            return;
-        }
-        if (valOp1 == "DIVISION BY ZERO!" || valOp2 == "DIVISION BY ZERO!") {
-            setValue(index, "DIVISION BY ZERO!");
-            return;
-        }
-        
+        // Calculating value in operand.
+        calcFuncValue(idxOp);
+        string valOp = getValue(idxOp);
+
         // Checking if cell data is integer.
-        std::size_t pos{};
-        int numOp1;
-        int numOp2;
         try
         {
-            numOp1 = std::stoi(valOp1, &pos);
-            if (pos != valOp1.length()) {
-                setValue(index, "WRONG VALUES IN CELLS!");
-                return;
-            }
-            numOp2 = std::stoi(valOp2, &pos);
-            if (pos != valOp2.length()) {
-                setValue(index, "WRONG VALUES IN CELLS!");
-                return;
+            std::size_t pos;
+            num = std::stoi(valOp, &pos);
+            if (pos != valOp.length()) {
+                throw string{"WRONG VALUES IN CELLS!"};
             }
         }
         catch(const std::invalid_argument &e)
         {
-            setValue(index, "WRONG VALUES IN CELLS!");
-            return;
-        }
-
-        switch (opSign)
-        {
-        case '+':
-            setValue(index, std::to_string(numOp1 + numOp2));
-            break;
-        case '-':
-            setValue(index, std::to_string(numOp1 - numOp2));
-            break;
-        case '*':
-            setValue(index, std::to_string(numOp1 * numOp2));
-            break;
-        case '/':
-            if (numOp2 != 0)
-                setValue(index, std::to_string(numOp1 / numOp2));
-            else
-                setValue(index, "DIVISION BY ZERO!");
-            break;
+            throw string{"WRONG VALUES IN CELLS!"};
         }
     }
+    return num;
 }
