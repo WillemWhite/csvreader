@@ -1,6 +1,14 @@
 #include "tablemodel.hpp"
 #include <algorithm>
 #include <iostream>
+#include <fstream>
+#include <memory>
+
+using std::cout, std::endl;
+using std::to_string;
+using std::size_t, std::stoi;
+using std::ifstream, std::getline;
+using std::shared_ptr, std::make_shared;
 
 TableModel::TableModel()
     : columns{}
@@ -8,6 +16,117 @@ TableModel::TableModel()
     , data{}
 {
 
+}
+
+const bool TableModel::loadFromFile(const string &fileName)
+{
+    if (fileName.find(".csv") == string::npos) {
+        cout << "Wrong format file! Please, enter <*.csv> file." << endl;
+        return false;
+    }
+
+    ifstream in;
+    in.open(fileName);
+    if (!in.is_open()) {
+        cout << "Can't open file." << endl;
+        return false;
+    }
+    cout << "File succesfully opened!" << endl;
+
+    string line;
+    int idxRow = -1;
+    int idxCol = 0;
+    vector<string> columns{};
+    vector<ulong> rows{};
+    while (getline(in, line))
+    {
+        int pos = 0;
+
+        if (line.find(",", 0) == string::npos)
+            break;
+
+        if (idxRow == -1) {
+            pos = line.find(",", pos)+1;
+            if (pos != 1) {
+                cout << "First symbol in file must be ','." << endl;
+                in.close();
+                return false;
+            }
+            while (pos != line.length())
+            {
+                string column;
+                if (line.find(",", pos) != string::npos) {
+                    column = line.substr(pos, line.find(",", pos) - pos);
+                    pos = line.find(",", pos)+1;
+                } else {
+                    column = line.substr(pos);
+                    pos = line.length();
+                }
+
+                if (std::find(columns.begin(), columns.end(), column) != columns.end()) {
+                    cout << "Columns in table not unique." << endl;
+                    in.close();
+                    return false;
+                }
+                columns.push_back(column);
+            }
+            idxRow++;
+            continue;
+        }
+
+        pos = line.find(",", pos)+1;
+        string strRow = line.substr(0, pos-1);
+        ulong row;
+        size_t p{};
+        try
+        {
+            row = stoi(strRow, &p);
+            if (p != strRow.length() || row < 1) {
+                cout << "Row must be positive integer." << endl;
+                in.close();
+                return false;
+            }
+        }
+        catch(const std::invalid_argument &e)
+        {
+            cout << "Row must be positive integer." << endl;
+            in.close();
+            return false;
+        }
+
+        if (std::find(rows.begin(), rows.end(), row) != rows.end()) {
+            cout << "Rows in table not unique." << endl;
+            in.close();
+            return false;
+        }
+        rows.push_back(row);
+
+        while (pos != line.length())
+        {
+            string cellData;
+            if (line.find(",", pos) != string::npos) {
+                cellData = line.substr(pos, line.find(",", pos) - pos);
+                pos = line.find(",", pos)+1;
+            } else {
+                cellData = line.substr(pos);
+                pos = line.length();
+            }
+            setValue({columns[idxCol], rows[idxRow]}, cellData);
+            idxCol++;
+        }
+        if (idxCol != columns.size()) {
+            cout << "Count of columns in row isn't match with announced." << endl;
+            in.close();
+            return false;
+        }
+
+        idxRow++;
+        idxCol = 0;
+    }
+
+    in.close();
+    
+    return true;
 }
 
 const string TableModel::getValue(const ModelIndex &index) const
@@ -89,17 +208,17 @@ void TableModel::calcFuncValue(const ModelIndex &index)
         switch (opSign)
         {
         case '+':
-            setValue(index, std::to_string(numOp1 + numOp2));
+            setValue(index, to_string(numOp1 + numOp2));
             break;
         case '-':
-            setValue(index, std::to_string(numOp1 - numOp2));
+            setValue(index, to_string(numOp1 - numOp2));
             break;
         case '*':
-            setValue(index, std::to_string(numOp1 * numOp2));
+            setValue(index, to_string(numOp1 * numOp2));
             break;
         case '/':
             if (numOp2 != 0)
-                setValue(index, std::to_string(numOp1 / numOp2));
+                setValue(index, to_string(numOp1 / numOp2));
             else
                 setValue(index, "DIVISION BY ZERO!");
             break;
@@ -128,7 +247,7 @@ const ModelIndex TableModel::strToIndex(const string &str) const
         pos += column.length();
         for (const auto &row : rows)
         {
-            if (std::to_string(row) == strReduced.substr(pos))
+            if (to_string(row) == strReduced.substr(pos))
                 return {column, row};
         }
     }
@@ -144,8 +263,8 @@ const int TableModel::operandToIntFromIndex(
     int num;
     try 
     {
-        std::size_t pos;
-        num = std::stoi(operand, &pos);
+        size_t pos;
+        num = stoi(operand, &pos);
         if (pos != operand.length())
             throw std::invalid_argument{"NOT A NUMBER!"};
     }
@@ -178,8 +297,8 @@ const int TableModel::operandToIntFromIndex(
         // Checking if cell data is integer.
         try
         {
-            std::size_t pos;
-            num = std::stoi(valOp, &pos);
+            size_t pos;
+            num = stoi(valOp, &pos);
             if (pos != valOp.length()) {
                 throw string{"WRONG VALUES IN CELLS!"};
             }

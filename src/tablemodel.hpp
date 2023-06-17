@@ -24,6 +24,7 @@ public:
     ~TableModel() = default;
 
 public:
+    const bool loadFromFile(const string &fileName);
     const vector<string> &getColumns() const { return columns; }
     const vector<ulong> &getRows() const { return rows; }
     const string getValue(const ModelIndex &index) const;

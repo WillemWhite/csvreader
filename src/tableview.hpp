@@ -17,7 +17,7 @@ public:
 public:
     shared_ptr<TableModel> getModel() const { return model; }
     void setModel(shared_ptr<TableModel> model) { this->model = model; }
-    unsigned getMaxCellLen() const;
+    const unsigned getMaxCellLen() const;
     void show() const;
     void showCSV() const;
 };

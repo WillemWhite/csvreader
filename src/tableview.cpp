@@ -2,11 +2,9 @@
 #include <iostream>
 #include <iomanip>
 
-using std::cout;
-using std::endl;
-using std::setiosflags;
-using std::ios;
-using std::setw;
+using std::cout, std::endl;
+using std::to_string;
+using std::setiosflags, std::ios, std::setw;
 
 TableView::TableView(const shared_ptr<TableModel> model)
     : model{model}
@@ -14,7 +12,7 @@ TableView::TableView(const shared_ptr<TableModel> model)
 
 }
 
-unsigned TableView::getMaxCellLen() const
+const unsigned TableView::getMaxCellLen() const
 {
     unsigned maxCellLen = 0;
 
@@ -83,7 +81,7 @@ void TableView::show() const
                  << setw(cellLen)
                  << value;
         }
-        cout << std::endl;
+        cout << endl;
     }
 }
 
@@ -108,6 +106,6 @@ void TableView::showCSV() const
             string value = model->getValue(ModelIndex{column, row});
             cout << "," + value;
         }
-        cout << std::endl;
+        cout << endl;
     }
 }
